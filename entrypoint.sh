@@ -3,7 +3,7 @@
 set -euo pipefail
 
 missing=""
-for var in SS_PORT SS_PASSWORD SS_ENCRYPT_METHOD SS_TIMEOUT SOCKS_PORT; do
+for var in GOST_COMMAND; do
   eval "value=\${$var:-}"
   [ -n "$value" ] || missing="$missing $var"
 done
@@ -38,21 +38,17 @@ sync_defaults "/opt/zapret2/files/fake.dist" "/opt/zapret2/files/fake" "fake fil
 
 cleanup() {
   /opt/zapret2/init.d/sysv/zapret2 stop || true
-  [ -n "${SS_SERVER_PID:-}" ] && kill "${SS_SERVER_PID}" 2>/dev/null || true
-  [ -n "${SS_LOCAL_PID:-}" ] && kill "${SS_LOCAL_PID}" 2>/dev/null || true
+  [ -n "${GOST_PID:-}" ] && kill "${GOST_PID}" 2>/dev/null || true
 }
 
 trap cleanup EXIT TERM INT
 
-SS_VERBOSE_FLAG=""
-if [ "${SS_VERBOSE:-0}" = "1" ]; then
-  SS_VERBOSE_FLAG="-v"
+GOST_VERBOSE_FLAG=""
+if [ "${GOST_VERBOSE:-0}" = "1" ]; then
+  GOST_VERBOSE_FLAG="-D"
 fi
 
-ss-server ${SS_VERBOSE_FLAG} -s 0.0.0.0 -p "${SS_PORT}" -k "${SS_PASSWORD}" -m "${SS_ENCRYPT_METHOD}" -t "${SS_TIMEOUT}" -u &
-SS_SERVER_PID=$!
-
-ss-local ${SS_VERBOSE_FLAG} -b 0.0.0.0 -s 127.0.0.1 -p "${SS_PORT}" -l "${SOCKS_PORT}" -k "${SS_PASSWORD}" -m "${SS_ENCRYPT_METHOD}" -t "${SS_TIMEOUT}" -u &
-SS_LOCAL_PID=$!
+/bin/gost ${GOST_VERBOSE_FLAG} ${GOST_COMMAND} &
+GOST_PID=$!
 
 wait

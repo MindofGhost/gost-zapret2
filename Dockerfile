@@ -2,6 +2,7 @@ ARG ALPINE_VERSION=3.21
 ARG ZAPRET_TAG=v1.0.5
 ARG CURL_VERSION=8.13.0
 ARG BLOCKCHECKW_VERSION=v0.9.4
+ARG GOST_VERSION=latest
 
 FROM alpine:${ALPINE_VERSION} AS build
 ARG ZAPRET_TAG
@@ -59,15 +60,14 @@ RUN BLOCKCHECKW_ARCH=$(cat /tmp/blockcheckw_arch) && \
     tar -xzf - -C /opt && \
     chmod +x /opt/blockcheckw
 
-FROM alpine:${ALPINE_VERSION}
+FROM ginuerzh/gost:${GOST_VERSION}
 
 RUN apk add --no-cache \
       ipset \
       iptables \
       ip6tables \
       nftables \
-      netcat-openbsd && \
-    apk add --no-cache -X https://dl-cdn.alpinelinux.org/alpine/edge/testing shadowsocks-libev
+      netcat-openbsd
 
 EXPOSE 1080 8388
 
