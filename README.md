@@ -1,20 +1,11 @@
 ![Zapret2 Version](https://img.shields.io/badge/zapret2-v1.0.5-red)
-![Docker Pulls](https://img.shields.io/docker/pulls/vernette/ss-zapret2?logo=docker)
 
-Docker-контейнер на основе [zapret2 от bol-van](https://github.com/bol-van/zapret2) с интегрированным Shadowsocks и SOCKS5 для подключения к контейнеру. Предназначен для удобной маршрутизации трафика через изолированную среду без модификации основной сети. Продолжение [ss-zapret](https://github.com/vernette/ss-zapret).
+Docker-контейнер на основе [zapret2 от bol-van](https://github.com/bol-van/zapret2) с интегрированным [gost](https://github.com/go-gost/gost) для подключения к контейнеру. Предназначен для удобной маршрутизации трафика через изолированную среду без модификации основной сети. Продолжение [ss-zapret](https://github.com/vernette/ss-zapret).
+
+В отличие от [оригинального репозитория ss-zapret2](https://github.com/vernette/ss-zapret2), отдельный Shadowsocks заменён на gost-прокси. Цель — упростить контейнер и снизить потребление RAM. В gost уже встроено множество протоколов, включая Shadowsocks; параметры команды запуска позволяют включать только необходимые протоколы и отключать остальные.
 
 - Изоляция zapret2 в отдельном контейнере
 - Простая интеграция с sing-box, Xray и другими прокси-клиентами
-
-Контейнер был протестирован на следующих хостингах:
-
-- [RocketCloud](https://cloudcore.ru/?affiliate_uuid=ce1874ee-4940-48b1-b37d-60e03cfada66)
-- [HSVDS](https://hsvds.ru/signup/?refid=20241026-9939487-843)
-- [VDS Selectel MSK](https://vds.selectel.ru)
-- [Aeza MSK](https://aeza.net/?ref=463603)
-- [VDC MSK](https://my.vdc.ru/?affid=191) - промокод `VERNETTE` на скидку в 9%
-- [RUVDS MSK](https://ruvds.com)
-- [4VPS](https://4vps.su/r/v4LLSnpUc6Yv) - проверялся сервер в Кемерово. Скидка 20% на первый заказ
 
 > [!CAUTION]
 > В режиме `nfqws` контейнер работает только на Linux из-за отсутствия `nfqueue` на других ОС
@@ -36,7 +27,7 @@ Docker-контейнер на основе [zapret2 от bol-van](https://githu
 - [Сценарии использования](#сценарии-использования)
 - [Разработка](#разработка)
 - [Вклад в разработку](#вклад-в-разработку)
-- [Предупреждение про Shadowsocks и SOCKS5](#предупреждение-про-shadowsocks-и-socks5)
+- [Предупреждение про доступ к прокси](#предупреждение-про-доступ-к-прокси)
 - [Благодарности](#благодарности)
 
 ## Быстрый старт
@@ -67,8 +58,8 @@ bash <(wget -qO- https://get.docker.com)
 1. Клонируйте репозиторий:
 
 ```bash
-git clone https://github.com/vernette/ss-zapret2
-cd ss-zapret2
+git clone --branch gost https://github.com/MindofGhost/gost-zapret2
+cd gost-zapret2
 ```
 
 2. Скопируйте стандартный конфиг zapret2:
@@ -77,42 +68,51 @@ cd ss-zapret2
 cp config.default config
 ```
 
-3. Cоздайте `.env` файл. За основу можно взять `.env.example`:
+3. Настройте gost в `docker-compose.yml`:
+
+```yaml
+    environment:
+      GOST_COMMAND: "-L=:8888"
+      GOST_VERBOSE: "0"
+```
+
+`GOST_COMMAND` обязателен: он задаёт аргументы запуска gost. В текущем примере используется порт `8888`, опубликованный только на `127.0.0.1` хоста по TCP и UDP. Проверка работоспособности контейнера также использует порт `8888`. При смене порта обновите `ports` и `healthcheck` в Compose.
+
+| Переменная | Описание |
+| ---------- | -------- |
+| `GOST_COMMAND` | Аргументы запуска gost: необходимые протоколы, порты, авторизация и другие параметры |
+| `GOST_VERBOSE` | `1` включает отладочные логи gost (`-D`), `0` отключает; по умолчанию `0` |
+
+Чтобы хранить параметры в `.env`, скопируйте `.env.example`:
 
 ```bash
 cp .env.example .env
-nano .env
 ```
-
-Пример содержимого `.env`:
 
 ```env
-SS_PORT=8388                                # Порт Shadowsocks
-SOCKS_PORT=1080                             # Порт SOCKS5
-SS_PASSWORD=SuperSecurePassword             # Пароль (рекомендуется изменить!)
-SS_ENCRYPT_METHOD=chacha20-ietf-poly1305    # Метод шифрования
-SS_TIMEOUT=300                              # Таймаут подключения
+GOST_COMMAND="-L=:8888"
+GOST_VERBOSE=0
 ```
 
-> [!NOTE]
-> Необязательно использовать `.env` файл. Вы можете задать переменные окружения вручную прямо в `docker-compose.yml`
+И замените блок `environment` в `docker-compose.yml` на подстановки:
 
-Список переменных окружения в `docker-compose.yml`:
+```yaml
+    environment:
+      GOST_COMMAND: "${GOST_COMMAND}"
+      GOST_VERBOSE: "${GOST_VERBOSE:-0}"
+```
 
-| Переменная                                  | Описание                                         |
-| ------------------------------------------- | ------------------------------------------------ |
-| SS_PORT: `8388`                             | Порт Shadowsocks                                 |
-| SOCKS_PORT: `1080`                          | Порт SOCKS5                                      |
-| SS_PASSWORD: `SuperSecurePassword`          | Пароль для Shadowsocks                           |
-| SS_ENCRYPT_METHOD: `chacha20-ietf-poly1305` | Метод шифрования Shadowsocks                     |
-| SS_TIMEOUT: `300`                           | Таймаут сокета Shadowsocks в секундах            |
-| SS_VERBOSE: `0`, `1`                        | Логгирование Shadowsocks. По умолчанию отключено |
+Без этой подстановки значение `GOST_COMMAND` из `.env` не заменяет аргументы, заданные непосредственно в Compose. Переменные `SS_PORT`, `SOCKS_PORT`, `SS_PASSWORD`, `SS_ENCRYPT_METHOD`, `SS_TIMEOUT` и `SS_VERBOSE` больше не используются.
 
-4. Запустите контейнер:
+Параметры протоколов и примеры команд описаны в [репозитории gost](https://github.com/go-gost/gost), образ которого используется в Dockerfile (`go-gost/gost`).
+
+4. Соберите и запустите контейнер из текущих исходников:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
+
+После изменения переменных окружения примените конфигурацию повторной командой `docker compose up -d`; обычный `restart` не обновляет переменные контейнера.
 
 ## Изменение конфигурации
 
@@ -151,13 +151,13 @@ docker compose restart
 Перед поиском стратегий нужно обязательно остановить zapret2 командой, чтобы поиск шёл без модификации трафика:
 
 ```bash
-docker compose exec ss-zapret2 sh /opt/zapret2/init.d/sysv/zapret2 stop
+docker compose exec gost-zapret2 sh /opt/zapret2/init.d/sysv/zapret2 stop
 ```
 
 Как и в оригинальном проекте, поиск стратегий осуществляется скриптом `blockcheck2.sh`. Этот скрипт подбирает оптимальные стратегии для вашего домашнего/хостинг провайдера:
 
 ```bash
-docker compose exec ss-zapret2 sh /opt/zapret2/blockcheck2.sh
+docker compose exec gost-zapret2 sh /opt/zapret2/blockcheck2.sh
 ```
 
 > [!TIP]
@@ -166,19 +166,19 @@ docker compose exec ss-zapret2 sh /opt/zapret2/blockcheck2.sh
 Пример запуска с параметрами:
 
 ```bash
-docker compose exec ss-zapret2 sh -c 'REPEATS=8 DOMAINS="amnezia.org discord.com" /opt/zapret2/blockcheck2.sh'
+docker compose exec gost-zapret2 sh -c 'REPEATS=8 DOMAINS="amnezia.org discord.com" /opt/zapret2/blockcheck2.sh'
 ```
 
 #### Поиск стратегий для HTTP, HTTPS TLS 1.2, без HTTPS TLS 1.3 и HTTP3 (QUIC). Подходит для сайтов, которые не поддерживают TLS 1.3 (таких мало, но они есть)
 
 ```bash
-docker compose exec ss-zapret2 sh -c 'SKIP_DNSCHECK=1 SECURE_DNS=0 IPVS=4 ENABLE_HTTP=1 ENABLE_HTTPS_TLS12=1 ENABLE_HTTPS_TLS13=0 ENABLE_HTTP3=0 REPEATS=8 PARALLEL=1 SCANLEVEL=standard BATCH=1 DOMAINS="amnezia.org discord.com" /opt/zapret2/blockcheck2.sh'
+docker compose exec gost-zapret2 sh -c 'SKIP_DNSCHECK=1 SECURE_DNS=0 IPVS=4 ENABLE_HTTP=1 ENABLE_HTTPS_TLS12=1 ENABLE_HTTPS_TLS13=0 ENABLE_HTTP3=0 REPEATS=8 PARALLEL=1 SCANLEVEL=standard BATCH=1 DOMAINS="amnezia.org discord.com" /opt/zapret2/blockcheck2.sh'
 ```
 
 #### Поиск стратегий для HTTPS TLS 1.3, без HTTP, HTTPS TLS 1.2 и HTTP3 (QUIC). Подходит для большинства сайтов и серверов YouTube
 
 ```bash
-docker compose exec ss-zapret2 sh -c 'SKIP_DNSCHECK=1 SECURE_DNS=0 IPVS=4 ENABLE_HTTP=0 ENABLE_HTTPS_TLS12=0 ENABLE_HTTPS_TLS13=1 ENABLE_HTTP3=0 REPEATS=8 PARALLEL=1 SCANLEVEL=standard BATCH=1 DOMAINS="xxxxxx.googlevideo.com" /opt/zapret2/blockcheck2.sh'
+docker compose exec gost-zapret2 sh -c 'SKIP_DNSCHECK=1 SECURE_DNS=0 IPVS=4 ENABLE_HTTP=0 ENABLE_HTTPS_TLS12=0 ENABLE_HTTPS_TLS13=1 ENABLE_HTTP3=0 REPEATS=8 PARALLEL=1 SCANLEVEL=standard BATCH=1 DOMAINS="xxxxxx.googlevideo.com" /opt/zapret2/blockcheck2.sh'
 ```
 
 Вместо `xxxxxx.googlevideo.com` можно указать адрес ближайшего GGC сервера, который можно найти командой (требуется установленный `curl` и `jq`):
@@ -188,7 +188,7 @@ curl "https://www.youtube.com/youtubei/v1/player" \
   --silent \
   --request POST \
   --json '{"videoId":"dQw4w9WgXcQ","context":{"client":{"clientName":"ANDROID","clientVersion":"21.02.35","androidSdkVersion":30,"userAgent":"com.google.android.youtube/21.02.35(Linux;U;Android11)gzip","osName":"Android","osVersion":"11"}}}' \
-  --proxy socks5://localhost:1080 |
+  --proxy socks5://localhost:8888 |
   jq -r ".streamingData.serverAbrStreamingUrl" |
   awk -F'/' '{print $3}'
 ```
@@ -199,7 +199,7 @@ curl "https://www.youtube.com/youtubei/v1/player" \
 После завершения поиска стратегий запустите zapret2 командой:
 
 ```bash
-docker compose exec ss-zapret2 sh /opt/zapret2/init.d/sysv/zapret2 start
+docker compose exec gost-zapret2 sh /opt/zapret2/init.d/sysv/zapret2 start
 ```
 
 Либо перезапустите контейнер:
@@ -221,7 +221,7 @@ FWTYPE=nftables
 Пример запуска:
 
 ```bash
-docker compose exec ss-zapret2 sh -c "blockcheckw -w 32 scan -d rutracker.org | blockcheckw check -d rutracker.org --take 10"
+docker compose exec gost-zapret2 sh -c "blockcheckw -w 32 scan -d rutracker.org | blockcheckw check -d rutracker.org --take 10"
 ```
 
 Более подробная документация описана в оригинальном репозитории.
@@ -294,22 +294,20 @@ fakes
 Проверить работу стратегий можно используя скрипт [censorcheck](https://github.com/vernette/censorcheck), указав локальный прокси контейнера:
 
 ```bash
-bash <(wget -qO- https://github.com/vernette/censorcheck/raw/master/censorcheck.sh) --mode dpi --proxy localhost:1080
+bash <(wget -qO- https://github.com/vernette/censorcheck/raw/master/censorcheck.sh) --mode dpi --proxy localhost:8888
 ```
 
 Проверить работу видео-доменов YouTube можно следующей командой:
 
 ```bash
-curl --connect-to ::speedtest.selectel.ru https://manifest.googlevideo.com/100MB -k -o/dev/null -x socks5://localhost:1080
+curl --connect-to ::speedtest.selectel.ru https://manifest.googlevideo.com/100MB -k -o/dev/null -x socks5://localhost:8888
 ```
 
 В поле `Current speed` должна расти скорость скачивания. Если она вообще не идёт или постоянно прыгает (во втором случае всё равно нужно проверить работу видео вручную) - стратегия не подходит.
 
 ### Интеграция с прокси-клиентами
 
-Интеграция ничем не отличается от [ss-zapret](https://github.com/vernette/ss-zapret).
-
-Примеры интеграции с sing-box, Xray и в существующий проект: [INTEGRATION.md](https://github.com/vernette/ss-zapret/blob/master/INTEGRATION.md)
+Настройте прокси-клиент на протокол и порт, выбранный через `GOST_COMMAND`. При запуске клиента на хосте контейнера используйте адрес `127.0.0.1`.
 
 ## Работа Instagram в браузере
 
@@ -318,7 +316,7 @@ curl --connect-to ::speedtest.selectel.ru https://manifest.googlevideo.com/100MB
 Чтобы решить эту проблему, нам нужно найти незаблокированный IP и прописать его в `docker-compose.yml` на сервере:
 
 ```yaml
-ss-zapret2:
+gost-zapret2:
   ...
   extra_hosts:
     instagram.com: "незаблокированный_ip"
@@ -343,27 +341,29 @@ docker compose down && docker compose up -d
 Сборка образа с другой версией zapret2:
 
 ```bash
-docker build -t ss-zapret2:v0.8 --build-arg ZAPRET_TAG=v0.8 .
+docker build -t gost-zapret2:v0.8 --build-arg ZAPRET_TAG=v0.8 .
 ```
 
 Затем отредактируйте `docker-compose.yml`:
 
 ```yaml
-ss-zapret2:
-  image: ss-zapret2:v0.8
+gost-zapret2:
+  image: gost-zapret2:v0.8
 ```
 
 ## Вклад в разработку
 
-Если у вас есть идеи для улучшения проекта, вы нашли баг или хотите предложить новую функциональность - не стесняйтесь создавать [issue](https://github.com/vernette/ss-zapret2/issues) или отправлять [pull request](https://github.com/vernette/ss-zapret2/pulls).
+Если у вас есть идеи для улучшения проекта, вы нашли баг или хотите предложить новую функциональность - не стесняйтесь создавать [issue](https://github.com/MindofGhost/gost-zapret2/issues) или отправлять [pull request](https://github.com/MindofGhost/gost-zapret2/pulls).
 
-## Предупреждение про Shadowsocks и SOCKS5
+## Предупреждение про доступ к прокси
 
 > [!IMPORTANT]
-> Shadowsocks и SOCKS5 предназначены только для подключения в **локальной** сети. Не рекомендуется использовать их для внешнего подключения, так как это может скомпрометировать сервер
+> В текущем Compose прокси доступен только через `127.0.0.1:8888`. Перед публикацией порта на внешних интерфейсах настройте авторизацию в gost и ограничьте доступ к прокси.
 
 ## Благодарности
 
 - [bol-van](https://github.com/bol-van) - За zapret2
 - [ampetelin](https://github.com/ampetelin) - За [изначальный](https://github.com/ampetelin/ss-zapret) проект
 - [rcd27](https://github.com/rcd27) - За blockcheckw
+
+- [ginuerzh/gost](https://github.com/ginuerzh/gost) - За прокси, используемый в образе
