@@ -51,4 +51,4 @@ fi
 /bin/gost ${GOST_VERBOSE_FLAG} ${GOST_COMMAND} &
 GOST_PID=$!
 
-wait
+wait "$GOST_PID"

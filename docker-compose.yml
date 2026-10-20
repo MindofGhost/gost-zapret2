@@ -5,8 +5,8 @@ services:
     container_name: zapret2-proxy
     restart: unless-stopped
     environment:
-      - GOST_COMMAND="-L=:8888"
-      - GOST_VERBOSE=${GOST_VERBOSE:-0}
+      GOST_COMMAND: "${GOST_COMMAND:--L=:8888}"
+      GOST_VERBOSE: "${GOST_VERBOSE:-0}"
     ports:
       - "127.0.0.1:8888:8888/tcp"
       - "127.0.0.1:8888:8888/udp"
