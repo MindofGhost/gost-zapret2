@@ -69,7 +69,7 @@ RUN apk add --no-cache \
       nftables \
       netcat-openbsd
 
-EXPOSE 1080 8388
+EXPOSE 8888
 
 WORKDIR /opt
 
